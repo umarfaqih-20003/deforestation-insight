@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indonesian Deforestation Insight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Space+Mono:wght@400;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --forest-dark: #0d1f0f; --forest-deep: #0f2411;
+    --leaf-green: #4caf50; --lime: #a8d5a2;
+    --danger: #e74c3c; --danger-light: #ff6b6b;
+    --amber: #f39c12; --amber-light: #f9ca24;
+    --cream: #f5f0e8; --muted: #8a9e8c;
+    --font-display: 'Playfair Display', serif;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'Lato', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--forest-dark); color: var(--cream); font-family: var(--font-body); overflow-x: hidden; }
+
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 500; padding: 1.1rem 3rem; display: flex; justify-content: space-between; align-items: center; background: rgba(13,31,15,0.88); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(76,175,80,0.13); }
+  .nav-logo { font-family: var(--font-mono); font-size: .78rem; color: var(--leaf-green); letter-spacing: .15em; text-transform: uppercase; }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); text-decoration: none; letter-spacing: .1em; text-transform: uppercase; transition: color .3s; }
+  .nav-links a:hover { color: var(--leaf-green); }
+
+  #hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 8rem 5rem 4rem; position: relative; overflow: hidden; }
+  .hero-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 55% 50% at 80% 50%, rgba(45,106,49,.15) 0%, transparent 70%), linear-gradient(160deg, #0d1f0f 0%, #091508 50%, #0f1e10 100%); z-index: 0; }
+  .hero-content { position: relative; z-index: 1; max-width: 820px; }
+  .hero-tag { font-family: var(--font-mono); font-size: .7rem; color: var(--leaf-green); letter-spacing: .25em; text-transform: uppercase; margin-bottom: 1.5rem; display: flex; align-items: center; gap: .75rem; }
+  .hero-tag::before { content: ''; display: inline-block; width: 2rem; height: 1px; background: var(--leaf-green); }
+  h1.hero-title { font-family: var(--font-display); font-size: clamp(2.6rem,5.5vw,5rem); font-weight: 900; line-height: 1.06; color: var(--cream); margin-bottom: 1.4rem; }
+  h1.hero-title em { font-style: italic; color: var(--danger-light); }
+  .hero-subtitle { font-size: 1rem; color: var(--muted); line-height: 1.75; max-width: 530px; margin-bottom: 2rem; }
+  .source-tag { font-family: var(--font-mono); font-size: .6rem; color: rgba(138,158,140,.55); margin-bottom: 2.4rem; letter-spacing: .1em; background: rgba(76,175,80,.06); border: 1px solid rgba(76,175,80,.12); border-radius: 4px; padding: .4rem .75rem; display: inline-block; }
+  .stat-row { display: flex; gap: 3rem; flex-wrap: wrap; }
+  .stat-block { position: relative; padding-left: 1.2rem; }
+  .stat-block::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--leaf-green); opacity: .4; }
+  .stat-number { font-family: var(--font-mono); font-size: 2.5rem; font-weight: 700; color: var(--cream); line-height: 1; display: block; }
+  .stat-number .unit { font-size: 1rem; color: var(--leaf-green); }
+  .stat-label { font-size: .7rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-top: .35rem; }
+  .scroll-hint { position: absolute; bottom: 2.5rem; left: 5rem; display: flex; align-items: center; gap: .75rem; font-family: var(--font-mono); font-size: .62rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; z-index: 1; }
+  .scroll-line { width: 3rem; height: 1px; background: var(--muted); position: relative; overflow: hidden; }
+  .scroll-line::after { content: ''; position: absolute; left: -100%; top: 0; bottom: 0; width: 100%; background: var(--leaf-green); animation: scan 2s ease-in-out infinite; }
+  @keyframes scan { 0%,100%{left:-100%} 50%{left:100%} }
+
+  section { padding: 6rem 5rem; }
+  .section-tag { font-family: var(--font-mono); font-size: .66rem; color: var(--leaf-green); letter-spacing: .25em; text-transform: uppercase; margin-bottom: .7rem; }
+  h2.section-title { font-family: var(--font-display); font-size: clamp(1.9rem,3.8vw,3rem); font-weight: 700; color: var(--cream); margin-bottom: 1rem; line-height: 1.15; }
+  .section-desc { color: var(--muted); font-size: .93rem; line-height: 1.75; max-width: 560px; margin-bottom: 2.8rem; }
+  .divider { width: 3rem; height: 2px; background: var(--leaf-green); margin-bottom: 1.8rem; }
+
+  #charts { background: var(--forest-deep); }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .charts-grid-3 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.5rem; }
+  .chart-card { background: rgba(255,255,255,.03); border: 1px solid rgba(76,175,80,.12); border-radius: 12px; padding: 1.8rem; position: relative; overflow: hidden; }
+  .chart-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg,var(--leaf-green),transparent); }
+  .chart-card h3 { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: .35rem; }
+  .chart-card .chart-val { font-family: var(--font-display); font-size: 1.35rem; color: var(--cream); margin-bottom: 1rem; }
+  .chart-card canvas { width: 100% !important; }
+
+  /* ── MAP SECTION ── */
+  #map-section { background: var(--forest-dark); }
+
+  .map-filter-bar {
+    display: flex; gap: 1.5rem; background: rgba(255,255,255,.04); padding: 1.2rem 1.4rem;
+    border-radius: 12px; margin-bottom: 1.6rem; border: 1px solid rgba(76,175,80,.18); flex-wrap: wrap; align-items: flex-end;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: .4rem; }
+  .filter-group label { font-family: var(--font-mono); font-size: .65rem; color: var(--leaf-green); text-transform: uppercase; letter-spacing: .12em; }
+  .map-select {
+    background: var(--forest-deep); color: var(--cream); border: 1px solid rgba(76,175,80,.4);
+    padding: .55rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: .75rem;
+    outline: none; cursor: pointer; transition: border-color .2s;
+  }
+  .map-select:hover, .map-select:focus { border-color: var(--leaf-green); }
+
+  #map-wrapper { position: relative; height: 520px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(76,175,80,.15); }
+  #leaflet-map { height: 100%; width: 100%; z-index: 1; }
+  .leaflet-container { background: #0a1a0c !important; }
+
+  .map-not-available {
+    position: absolute; inset: 0; background: rgba(13,31,15,.93);
+    display: none; justify-content: center; align-items: center; z-index: 100;
+    flex-direction: column; gap: 1rem;
+  }
+  .map-not-available .na-icon { font-size: 2.8rem; }
+  .map-not-available .na-text { font-family: var(--font-mono); color: var(--danger-light); font-size: .85rem; letter-spacing: .2em; text-transform: uppercase; }
+  .map-not-available .na-sub { font-family: var(--font-mono); color: var(--muted); font-size: .68rem; letter-spacing: .1em; }
+
+  .map-legend {
+    margin-top: 1.4rem; padding: 1.1rem 1.4rem; background: rgba(255,255,255,.03);
+    border-radius: 10px; border: 1px solid rgba(76,175,80,.1);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 1.8rem;
+  }
+  .legend-title { font-family: var(--font-mono); font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+  .legend-items { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: .55rem; font-family: var(--font-mono); font-size: .72rem; color: var(--cream); }
+  .legend-dot { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); flex-shrink: 0; }
+  .legend-size-row { display: flex; align-items: center; gap: .8rem; font-family: var(--font-mono); font-size: .68rem; color: var(--muted); margin-left: auto; }
+  .legend-bubble { border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); display: inline-block; }
+
+  .custom-popup .leaflet-popup-content-wrapper { background: var(--forest-deep); border: 1px solid rgba(76,175,80,.3); border-radius: 10px; color: var(--cream); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .custom-popup .leaflet-popup-tip { background: var(--forest-deep); }
+  .popup-content h4 { font-family: var(--font-display); font-size: 1rem; color: var(--cream); margin-bottom: .45rem; }
+  .popup-content p { font-family: var(--font-mono); font-size: .67rem; color: var(--muted); margin-bottom: .2rem; }
+  .popup-content .pop-val { color: var(--danger-light); font-weight: 700; }
+  .popup-content .pop-green { color: var(--lime); font-weight: 700; }
+  .popup-content .pop-warn { color: var(--amber-light); font-weight: 700; }
+
+  #insights { background: var(--forest-deep); }
+  .insight-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.5rem; margin-bottom: 3rem; }
+  .insight-card { background: rgba(255,255,255,.025); border: 1px solid rgba(76,175,80,.1); border-radius: 12px; padding: 1.8rem; position: relative; transition: border-color .3s, transform .3s; }
+  .insight-card:hover { border-color: rgba(76,175,80,.4); transform: translateY(-3px); }
+  .insight-icon { font-size: 2rem; margin-bottom: .9rem; display: block; }
+  .insight-card h3 { font-family: var(--font-display); font-size: 1.12rem; color: var(--cream); margin-bottom: .5rem; }
+  .insight-card p { font-size: .85rem; color: var(--muted); line-height: 1.7; }
+  .insight-badge { position: absolute; top: 1.1rem; right: 1.1rem; font-family: var(--font-mono); font-size: .61rem; color: var(--danger); background: rgba(231,76,60,.12); border: 1px solid rgba(231,76,60,.25); padding: .18rem .55rem; border-radius: 20px; letter-spacing: .1em; text-transform: uppercase; }
+  .insight-badge.warn { color: var(--amber-light); background: rgba(249,202,36,.08); border-color: rgba(249,202,36,.2); }
+  .insight-badge.good { color: var(--leaf-green); background: rgba(76,175,80,.1); border-color: rgba(76,175,80,.25); }
+
+  .corr-section { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
+  .corr-stats { display: flex; flex-direction: column; gap: 1.4rem; }
+  .corr-stat { display: flex; flex-direction: column; gap: .38rem; }
+  .corr-bar-wrap { height: 5px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+  .corr-bar { height: 100%; border-radius: 3px; transition: width 1.5s cubic-bezier(.4,0,.2,1); width: 0; }
+  .corr-label { font-family: var(--font-mono); font-size: .67rem; color: var(--muted); display: flex; justify-content: space-between; }
+
+  #simulator { background: var(--forest-dark); }
+  .sim-container { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: start; }
+  .sim-controls { display: flex; flex-direction: column; gap: 2rem; }
+  .slider-group label { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; display: flex; justify-content: space-between; margin-bottom: .7rem; }
+  .slider-group label span { color: var(--amber-light); font-weight: 700; }
+  input[type="range"] { width: 100%; -webkit-appearance: none; height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%; background: var(--leaf-green); border: 2px solid var(--forest-dark); box-shadow: 0 0 10px rgba(76,175,80,.5); }
+  .sim-results { background: rgba(255,255,255,.03); border: 1px solid rgba(76,175,80,.12); border-radius: 12px; padding: 2.2rem; }
+  .sim-results h3 { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; margin-bottom: 1.8rem; }
+  .sim-output-grid { display: flex; flex-direction: column; gap: 1.4rem; }
+  .sim-output-item .label { font-size: .78rem; color: var(--muted); margin-bottom: .3rem; }
+  .sim-output-item .value { font-family: var(--font-mono); font-size: 1.5rem; color: var(--cream); transition: color .4s; }
+  .sim-output-item .value.danger { color: var(--danger-light); }
+  .sim-output-item .value.warn { color: var(--amber-light); }
+  .sim-output-item .value.ok { color: var(--lime); }
+  .sim-progress { height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; overflow: hidden; margin-top: .35rem; }
+  .sim-progress-bar { height: 100%; border-radius: 2px; transition: width .6s ease, background .6s; }
+
+  footer { background: #070e08; padding: 2.5rem 5rem; border-top: 1px solid rgba(76,175,80,.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+  footer .f-logo { font-family: var(--font-display); font-size: 1.2rem; color: var(--cream); }
+  footer .f-links { display: flex; gap: 1.8rem; list-style: none; }
+  footer .f-links a { font-family: var(--font-mono); font-size: .66rem; color: var(--muted); text-decoration: none; text-transform: uppercase; letter-spacing: .1em; transition: color .3s; }
+  footer .f-links a:hover { color: var(--leaf-green); }
+  footer p { font-size: .68rem; color: rgba(138,158,140,.5); font-family: var(--font-mono); }
+
+  .counter { display: inline-block; }
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 900px) {
+    nav { padding: 1rem 1.5rem; } .nav-links { display: none; }
+    section { padding: 4rem 1.5rem; } #hero { padding: 6rem 1.5rem 3rem; }
+    .charts-grid,.charts-grid-3,.insight-grid,.corr-section,.sim-container { grid-template-columns: 1fr; }
+    .stat-row { gap: 2rem; }
+    footer { flex-direction: column; padding: 2rem 1.5rem; }
+    .map-filter-bar { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">🌿 Indonesia Deforestation Insight</div>
+  <ul class="nav-links">
+    <li><a href="#hero">Home</a></li>
+    <li><a href="#charts">Data</a></li>
+    <li><a href="#map-section">Map</a></li>
+    <li><a href="#insights">Insights</a></li>
+    <li><a href="#simulator">Simulator</a></li>
+  </ul>
+</nav>
+
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Data-Driven Environmental Crisis · Global Forest Watch 2024</div>
+    <h1 class="hero-title">A Crisis Hidden<br>in <em>Plain Sight</em>:<br>Indonesia's Forests</h1>
+    <p class="hero-subtitle">Indonesia's forests covered over 160 million hectares in 2000 — one of the world's most biodiverse tropical ecosystems. Since then, nearly <strong style="color:var(--cream)">32 million hectares</strong> have been cleared, making the nation a net carbon source of 356 million Mg CO₂e per year.</p>
+    <div class="source-tag">📄 Source: IDN.xlsx · Global Forest Watch / UMD GLAD · Hansen et al. 2013 · Harris et al. 2021 · 30% canopy cover threshold · 2001–2024</div>
+    <div class="stat-row">
+      <div class="stat-block">
+        <span class="stat-number"><span class="unit">~</span><span class="counter" data-target="160.6" data-suffix=" M ha">0</span></span>
+        <div class="stat-label">Forest Extent Year 2000</div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-number"><span class="unit">−</span><span class="counter" data-target="32" data-suffix=" M ha">0</span></span>
+        <div class="stat-label">Tree Cover Lost 2001–2024</div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-number"><span class="counter" data-target="1.33" data-suffix=" M ha/yr">0</span></span>
+        <div class="stat-label">Average Annual Loss</div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-number"><span class="counter" data-target="0.967" data-suffix=" Gt CO₂e">0</span></span>
+        <div class="stat-label">Avg. Annual Gross Emissions</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-hint"><div class="scroll-line"></div>Scroll to explore</div>
+</section>
+
+<section id="charts">
+  <div class="section-tag">Section 01 · Visualizations</div>
+  <h2 class="section-title">Forest Loss in Numbers</h2>
+  <div class="divider"></div>
+  <p class="section-desc">Annual tree cover loss and gross GHG emissions 2001–2024 at ≥30% canopy cover, top provinces by cumulative loss, and Indonesia's forest carbon balance — all from IDN.xlsx.</p>
+
+  <div class="charts-grid reveal">
+    <div class="chart-card">
+      <h3>Annual Tree Cover Loss (ha) · Indonesia</h3>
+      <div class="chart-val">2001–2024 · Peak 2016: 2.42 M ha</div>
+      <canvas id="lineChart" height="210"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Annual Gross Forest GHG Emissions (Mg CO₂e)</h3>
+      <div class="chart-val">Avg. 967 M Mg CO₂e/yr · Peak 2016: 1.82 Gt</div>
+      <canvas id="emissionsChart" height="210"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid-3 reveal">
+    <div class="chart-card">
+      <h3>Top 10 Provinces · Total Tree Cover Loss 2001–2024 (K ha)</h3>
+      <div class="chart-val">Riau leads at 4,302 K ha · 54.8% of its 2000 extent</div>
+      <canvas id="barChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>National Carbon Balance · Avg. Annual (M Mg CO₂e/yr)</h3>
+      <div class="chart-val">Net Source: +356 M Mg CO₂e/yr</div>
+      <canvas id="carbonChart" height="200"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════
+     MAP SECTION — enhanced with filters & legend
+     ══════════════════════════════════════════════ -->
+<section id="map-section">
+  <div class="section-tag">Section 02 · Geographic Distribution</div>
+  <h2 class="section-title">National Distribution Map</h2>
+  <div class="divider"></div>
+  <p class="section-desc">Select a data category and year to visualize the provincial distribution. Deforestation data shows total tree cover loss 2001–2024; palm oil plantation data is available for 2011–2023.</p>
+
+  <!-- Filter bar -->
+  <div class="map-filter-bar reveal">
+    <div class="filter-group">
+      <label>Data Category</label>
+      <select id="dataCategory" class="map-select">
+        <option value="deforestation">Deforestation – Tree Cover Loss (ha)</option>
+        <option value="sawit">Palm Oil Plantation Area (Thousand Ha)</option>
+      </select>
+    </div>
+    <div class="filter-group" id="yearFilterGroup">
+      <label>Year</label>
+      <select id="yearFilter" class="map-select"></select>
+    </div>
+  </div>
+
+  <!-- Map wrapper with "not available" overlay -->
+  <div id="map-wrapper" class="reveal">
+    <div id="map-na" class="map-not-available">
+      <div class="na-icon">🚫</div>
+      <div class="na-text">Data Not Available</div>
+      <div class="na-sub">No data available for the selected year / category</div>
+    </div>
+    <div id="leaflet-map"></div>
+  </div>
+
+  <!-- Legend -->
+  <div class="map-legend reveal" id="mapLegend">
+    <span class="legend-title">Intensity:</span>
+    <div class="legend-items" id="legendItems">
+      <!-- populated by JS -->
+    </div>
+    <div class="legend-size-row">
+      <span style="font-family:var(--font-mono);font-size:.65rem;color:var(--muted);">Circle size ∝ data value</span>
+      <span class="legend-bubble" style="width:8px;height:8px;"></span>
+      <span class="legend-bubble" style="width:14px;height:14px;"></span>
+      <span class="legend-bubble" style="width:22px;height:22px;"></span>
+    </div>
+  </div>
+</section>
+
+<section id="insights">
+  <div class="section-tag">Section 03 · Statistical Insights</div>
+  <h2 class="section-title">What the Data Tells Us</h2>
+  <div class="divider"></div>
+
+  <div class="insight-grid reveal">
+    <div class="insight-card">
+      <div class="insight-badge">Critical</div>
+      <span class="insight-icon">🌲</span>
+      <h3>19.9% Forest Cover Lost</h3>
+      <p>Of 160.6M ha of forest in 2000, <strong style="color:var(--danger-light)">31.96M ha (19.9%)</strong> was lost by 2024. The worst single year was <strong style="color:var(--danger-light)">2016</strong> at 2.42M ha — 4.5× the lowest year (2003: 544K ha).</p>
+    </div>
+    <div class="insight-card">
+      <div class="insight-badge">Critical</div>
+      <span class="insight-icon">🌡️</span>
+      <h3>Net Carbon Source: +356M Mg/yr</h3>
+      <p>Gross emissions average <strong style="color:var(--danger-light)">967M Mg CO₂e/yr</strong> against removals of only 611M Mg CO₂/yr — a net <strong style="color:var(--danger-light)">+356M Mg CO₂e/yr</strong> released to the atmosphere from forest disturbance.</p>
+    </div>
+    <div class="insight-card">
+      <div class="insight-badge warn">Warning</div>
+      <span class="insight-icon">🔥</span>
+      <h3>4 Provinces = 47.5% of National Loss</h3>
+      <p>Riau (4.3M ha), Kalimantan Barat (4.2M ha), Kalimantan Tengah (3.9M ha) and Sumatera Selatan (3.3M ha) together account for <strong style="color:var(--amber-light)">47.5%</strong> of all national loss 2001–2024.</p>
+    </div>
+    <div class="insight-card">
+      <div class="insight-badge">Critical</div>
+      <span class="insight-icon">🌊</span>
+      <h3>Riau: 54.8% Extent Lost</h3>
+      <p>Riau has the highest absolute loss at <strong style="color:var(--danger-light)">4.30M ha</strong> and the worst loss rate: <strong style="color:var(--danger-light)">54.8%</strong> of its 2000 forest extent was cleared in 24 years. Its average annual emissions: 164.5M Mg CO₂e.</p>
+    </div>
+    <div class="insight-card">
+      <div class="insight-badge warn">Warning</div>
+      <span class="insight-icon">📈</span>
+      <h3>Post-2021 Rebound Underway</h3>
+      <p>Loss dropped to a low of <strong style="color:var(--lime)">841K ha in 2021</strong>, but rose again to <strong style="color:var(--amber-light)">1.40M ha in 2023</strong> — a 66% jump. This rebound suggests pressure from recent land-use expansion has not yet been contained.</p>
+    </div>
+    <div class="insight-card">
+      <div class="insight-badge good">Bright Spot</div>
+      <span class="insight-icon">💚</span>
+      <h3>Papua: Only 2.6% Lost</h3>
+      <p>Papua has lost only <strong style="color:var(--lime)">766K ha</strong> from a base of 29.6M ha — just <strong style="color:var(--lime)">2.6%</strong> of its forest cover — and remains a net carbon sink at −39.0M Mg CO₂e/yr. A critical buffer for the global climate.</p>
+    </div>
+  </div>
+
+  <div class="corr-section reveal">
+    <div>
+      <h3 style="font-family:var(--font-display);font-size:1.5rem;color:var(--cream);margin-bottom:.7rem;">Top Provincial Emitters</h3>
+      <p style="color:var(--muted);font-size:.87rem;line-height:1.75;margin-bottom:1.8rem;">Provinces with the highest tree cover loss are also the dominant carbon emitters. Riau alone emits more than all of Sulawesi combined. Note: some provinces are net carbon sinks despite local loss.</p>
+      <div class="corr-stats" id="corrStats">
+        <div class="corr-stat">
+          <div class="corr-label"><span>Riau</span><span style="color:var(--danger-light)">164.5 M Mg CO₂e/yr avg.</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="100" style="background:var(--danger-light)"></div></div>
+        </div>
+        <div class="corr-stat">
+          <div class="corr-label"><span>Kalimantan Tengah</span><span style="color:var(--danger-light)">124.9 M Mg CO₂e/yr avg.</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="76" style="background:var(--danger-light)"></div></div>
+        </div>
+        <div class="corr-stat">
+          <div class="corr-label"><span>Kalimantan Barat</span><span style="color:var(--amber-light)">123.7 M Mg CO₂e/yr avg.</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="75" style="background:var(--amber-light)"></div></div>
+        </div>
+        <div class="corr-stat">
+          <div class="corr-label"><span>Sumatera Selatan</span><span style="color:var(--amber-light)">103.8 M Mg CO₂e/yr avg.</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="63" style="background:var(--amber-light)"></div></div>
+        </div>
+        <div class="corr-stat">
+          <div class="corr-label"><span>Kalimantan Timur</span><span style="color:var(--lime)">88.1 M Mg CO₂e/yr avg.</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="54" style="background:var(--lime)"></div></div>
+        </div>
+        <div class="corr-stat">
+          <div class="corr-label"><span>Papua (net sink)</span><span style="color:#66b2ff">−39.0 M Mg CO₂e net flux</span></div>
+          <div class="corr-bar-wrap"><div class="corr-bar" data-width="24" style="background:#66b2ff"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Annual Loss vs. Annual Emissions · Scatter</h3>
+      <div class="chart-val">r ≈ 0.97 — Near-perfect correlation</div>
+      <canvas id="scatterChart" height="260"></canvas>
+    </div>
+  </div>
+</section>
+
+<section id="simulator">
+  <div class="section-tag">Section 04 · Scenario Simulator</div>
+  <h2 class="section-title">Impact Simulator</h2>
+  <div class="divider"></div>
+  <p class="section-desc">Calibrated with real IDN.xlsx data: baseline = 1.33M ha/yr loss · 0.967 Gt CO₂e/yr emissions · 128.7M ha remaining (2024). Adjust sliders to model future scenarios.</p>
+
+  <div class="sim-container reveal">
+    <div class="sim-controls">
+      <div class="slider-group">
+        <label>Annual Loss Rate Change (%) <span id="rateVal">+0%</span></label>
+        <input type="range" id="rateSlider" min="-80" max="100" value="0" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Restoration (% of annual loss offset) <span id="restoreVal">0%</span></label>
+        <input type="range" id="restoreSlider" min="0" max="80" value="0" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Emissions Intensity Change (%) <span id="emFactor">+0%</span></label>
+        <input type="range" id="emSlider" min="-50" max="50" value="0" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Projection Horizon (years) <span id="yearsVal">10</span></label>
+        <input type="range" id="yearsSlider" min="5" max="50" value="10" step="5">
+      </div>
+      <div style="padding:1rem;background:rgba(76,175,80,.05);border:1px solid rgba(76,175,80,.14);border-radius:8px;font-size:.77rem;color:var(--muted);line-height:1.7;">
+        ⚠️ <strong style="color:var(--cream)">Baseline (from IDN.xlsx):</strong> 1,331,796 ha/yr avg. loss · 0.967 Gt CO₂e/yr avg. emissions · 128.7M ha remaining. Linear projection model — indicative only.
+      </div>
+    </div>
+
+    <div class="sim-results">
+      <h3>📊 Projected Outcomes</h3>
+      <div class="sim-output-grid">
+        <div class="sim-output-item">
+          <div class="label">Additional Forest Lost (M ha)</div>
+          <div class="value" id="out-forest">13.3</div>
+          <div class="sim-progress"><div class="sim-progress-bar" id="bar-forest" style="width:20%;background:var(--amber-light)"></div></div>
+        </div>
+        <div class="sim-output-item">
+          <div class="label">Cumulative CO₂e Released (Gt)</div>
+          <div class="value" id="out-co2">9.7</div>
+          <div class="sim-progress"><div class="sim-progress-bar" id="bar-co2" style="width:16%;background:var(--amber-light)"></div></div>
+        </div>
+        <div class="sim-output-item">
+          <div class="label">Forest Cover Remaining (M ha)</div>
+          <div class="value" id="out-cover">115.4</div>
+          <div class="sim-progress"><div class="sim-progress-bar" id="bar-cover" style="width:72%;background:var(--lime)"></div></div>
+        </div>
+        <div class="sim-output-item">
+          <div class="label">% of 2000 Extent Remaining</div>
+          <div class="value" id="out-pct">71.8%</div>
+          <div class="sim-progress"><div class="sim-progress-bar" id="bar-pct" style="width:72%;background:var(--lime)"></div></div>
+        </div>
+        <div class="sim-output-item">
+          <div class="label">Scenario Risk Level</div>
+          <div class="value" id="out-risk">MODERATE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="f-logo">🌿 Deforestation Insight</div>
+  <ul class="f-links">
+    <li><a href="https://globalforestwatch.org" target="_blank">Global Forest Watch</a></li>
+    <li><a href="https://glad.earthengine.app/view/global-forest-change" target="_blank">UMD GLAD Lab</a></li>
+    <li><a href="https://data.globalforestwatch.org" target="_blank">GFW Data Portal</a></li>
+  </ul>
+  <p>IDN.xlsx · GFW · Hansen et al. 2013 · Harris et al. 2021 · Sims et al. 2025</p>
+</footer>
+
+<script>
+// ═══ REAL DATA FROM IDN.XLSX ═══
+const D = {"annual_loss":{"2001":744084,"2002":855270,"2003":544811,"2004":1289035,"2005":1182436,"2006":1433147,"2007":1387620,"2008":1396247,"2009":1944958,"2010":1279328,"2011":1543627,"2012":2260258,"2013":1139300,"2014":1894359,"2015":1746464,"2016":2422065,"2017":1300719,"2018":1218733,"2019":1176884,"2020":961585,"2021":841390,"2022":885237,"2023":1395285,"2024":1120264},"annual_emissions":{"2001":503083289,"2002":641643050,"2003":437532304,"2004":996525680,"2005":960834109,"2006":1036817155,"2007":1175307638,"2008":1040636990,"2009":1422248487,"2010":1041673447,"2011":1238960256,"2012":1785096764,"2013":872301040,"2014":1417302238,"2015":1269602921,"2016":1815773667,"2017":836976513,"2018":770821762,"2019":747939656,"2020":599003234,"2021":514506681,"2022":546402998,"2023":849245101,"2024":686619626},"extent_2000":160640822,"total_loss":31963106,"avg_emissions":966952277,"avg_removals":610945957,"net_flux":356006316,"provinces":[{"name":"Aceh","lat":4.695,"lng":96.749,"total":856922,"extent_2000":4984708,"peak_year":2009,"peak_ha":69111,"trend":"Increasing","avg_emissions":22138237,"net_flux":8567015,"annual":{"2001":18278,"2002":10952,"2003":11816,"2004":19138,"2005":26479,"2006":21284,"2007":24168,"2008":36734,"2009":69111,"2010":40757,"2011":47485,"2012":49396,"2013":41390,"2014":58555,"2015":33969,"2016":50074,"2017":45813,"2018":46111,"2019":28562,"2020":30225,"2021":31786,"2022":29785,"2023":38983,"2024":46071}},{"name":"Bali","lat":-8.34,"lng":115.092,"total":8517,"extent_2000":365485,"peak_year":2014,"peak_ha":907,"trend":"Decreasing","avg_emissions":215607,"net_flux":-2173040,"annual":{"2001":424,"2002":311,"2003":179,"2004":370,"2005":236,"2006":515,"2007":504,"2008":229,"2009":377,"2010":198,"2011":216,"2012":743,"2013":396,"2014":907,"2015":133,"2016":156,"2017":263,"2018":302,"2019":706,"2020":165,"2021":199,"2022":262,"2023":558,"2024":168}},{"name":"Bangka Belitung","lat":-2.741,"lng":106.441,"total":702137,"extent_2000":1332845,"peak_year":2009,"peak_ha":63896,"trend":"Increasing","avg_emissions":15221676,"net_flux":7824198,"annual":{"2001":13910,"2002":11247,"2003":7124,"2004":21976,"2005":19839,"2006":20241,"2007":23237,"2008":22678,"2009":63896,"2010":23187,"2011":32400,"2012":39451,"2013":17575,"2014":41246,"2015":41281,"2016":58203,"2017":25558,"2018":22426,"2019":25529,"2020":24628,"2021":31006,"2022":34052,"2023":50388,"2024":31059}},{"name":"Banten","lat":-6.406,"lng":106.064,"total":51838,"extent_2000":561723,"peak_year":2019,"peak_ha":4715,"trend":"Increasing","avg_emissions":1321451,"net_flux":-2310725,"annual":{"2001":1054,"2002":1761,"2003":293,"2004":1404,"2005":545,"2006":1938,"2007":1060,"2008":930,"2009":2754,"2010":1633,"2011":2329,"2012":3286,"2013":1830,"2014":2275,"2015":2663,"2016":1969,"2017":3495,"2018":3401,"2019":4715,"2020":2042,"2021":1915,"2022":1546,"2023":3744,"2024":3256}},{"name":"Bengkulu","lat":-3.578,"lng":102.346,"total":476915,"extent_2000":1795200,"peak_year":2023,"peak_ha":29912,"trend":"Increasing","avg_emissions":13933685,"net_flux":6525332,"annual":{"2001":14198,"2002":10421,"2003":8104,"2004":25985,"2005":13142,"2006":23589,"2007":17580,"2008":22353,"2009":18756,"2010":16012,"2011":24563,"2012":27761,"2013":14153,"2014":20320,"2015":20197,"2016":24378,"2017":27232,"2018":24624,"2019":18200,"2020":16311,"2021":14326,"2022":23800,"2023":29912,"2024":20998}},{"name":"Gorontalo","lat":0.7,"lng":122.447,"total":144875,"extent_2000":1002909,"peak_year":2015,"peak_ha":13286,"trend":"Decreasing","avg_emissions":4214159,"net_flux":1734009,"annual":{"2001":3499,"2002":8013,"2003":2806,"2004":6949,"2005":4241,"2006":5250,"2007":4329,"2008":1794,"2009":11263,"2010":1570,"2011":2979,"2012":3927,"2013":5938,"2014":10353,"2015":13286,"2016":10910,"2017":7869,"2018":8007,"2019":10959,"2020":3030,"2021":2199,"2022":2819,"2023":8242,"2024":4643}},{"name":"Jambi","lat":-1.61,"lng":103.613,"total":2005971,"extent_2000":4484184,"peak_year":2016,"peak_ha":157246,"trend":"Increasing","avg_emissions":62800090,"net_flux":37954481,"annual":{"2001":46911,"2002":45074,"2003":21497,"2004":97086,"2005":71003,"2006":119577,"2007":118972,"2008":124204,"2009":125511,"2010":36678,"2011":48905,"2012":152388,"2013":66707,"2014":77432,"2015":60611,"2016":157246,"2017":86203,"2018":69978,"2019":67673,"2020":78387,"2021":73131,"2022":75657,"2023":93816,"2024":91324}},{"name":"Jawa Barat","lat":-7.091,"lng":107.669,"total":95916,"extent_2000":2007190,"peak_year":2019,"peak_ha":6974,"trend":"Stable","avg_emissions":2558059,"net_flux":-8725374,"annual":{"2001":6798,"2002":3851,"2003":1979,"2004":3659,"2005":2327,"2006":5244,"2007":3055,"2008":5116,"2009":2886,"2010":2632,"2011":5421,"2012":3753,"2013":2565,"2014":3758,"2015":3502,"2016":3657,"2017":5646,"2018":4509,"2019":6974,"2020":3459,"2021":2568,"2022":2575,"2023":5561,"2024":4421}},{"name":"Jawa Tengah","lat":-7.15,"lng":110.14,"total":62394,"extent_2000":1507023,"peak_year":2023,"peak_ha":4726,"trend":"Increasing","avg_emissions":1673986,"net_flux":-8139983,"annual":{"2001":2676,"2002":1899,"2003":791,"2004":3568,"2005":1703,"2006":3474,"2007":2898,"2008":2657,"2009":3054,"2010":1323,"2011":4500,"2012":2450,"2013":1180,"2014":2883,"2015":1808,"2016":2285,"2017":3457,"2018":2573,"2019":2769,"2020":2752,"2021":2109,"2022":2085,"2023":4726,"2024":2774}},{"name":"Jawa Timur","lat":-7.536,"lng":112.238,"total":106641,"extent_2000":1917062,"peak_year":2012,"peak_ha":8314,"trend":"Stable","avg_emissions":2846645,"net_flux":-7624253,"annual":{"2001":4227,"2002":4052,"2003":2910,"2004":6465,"2005":2820,"2006":5746,"2007":4430,"2008":3993,"2009":4277,"2010":1648,"2011":5849,"2012":8314,"2013":2754,"2014":6771,"2015":2901,"2016":3188,"2017":4713,"2018":4290,"2019":5112,"2020":4919,"2021":3520,"2022":2918,"2023":6319,"2024":4505}},{"name":"Kalimantan Barat","lat":0,"lng":109.333,"total":4209108,"extent_2000":13640399,"peak_year":2012,"peak_ha":312530,"trend":"Increasing","avg_emissions":123736412,"net_flux":67073196,"annual":{"2001":77940,"2002":96866,"2003":55967,"2004":113923,"2005":104566,"2006":130920,"2007":132081,"2008":202683,"2009":288604,"2010":152522,"2011":262481,"2012":312530,"2013":199514,"2014":291474,"2015":267806,"2016":286374,"2017":181330,"2018":159317,"2019":143107,"2020":121935,"2021":109033,"2022":137501,"2023":206711,"2024":173923}},{"name":"Kalimantan Selatan","lat":-3.093,"lng":115.284,"total":933527,"extent_2000":2818008,"peak_year":2015,"peak_ha":73379,"trend":"Stable","avg_emissions":24211333,"net_flux":6565685,"annual":{"2001":18967,"2002":24324,"2003":18403,"2004":41871,"2005":25392,"2006":54016,"2007":29584,"2008":18696,"2009":60466,"2010":26199,"2011":48257,"2012":66809,"2013":35960,"2014":66373,"2015":73379,"2016":65747,"2017":37465,"2018":37578,"2019":44331,"2020":21000,"2021":21668,"2022":17769,"2023":51434,"2024":27839}},{"name":"Kalimantan Tengah","lat":-1.682,"lng":113.382,"total":3860238,"extent_2000":14220881,"peak_year":2016,"peak_ha":492975,"trend":"Decreasing","avg_emissions":124896244,"net_flux":74651254,"annual":{"2001":64076,"2002":102874,"2003":129122,"2004":169837,"2005":158552,"2006":221893,"2007":291717,"2008":204626,"2009":194376,"2010":142342,"2011":139335,"2012":218881,"2013":103285,"2014":197213,"2015":213840,"2016":492975,"2017":102894,"2018":110369,"2019":122143,"2020":90490,"2021":53159,"2022":72734,"2023":144866,"2024":118639}},{"name":"Kalimantan Timur","lat":1.641,"lng":116.419,"total":3133433,"extent_2000":11718039,"peak_year":2016,"peak_ha":313958,"trend":"Increasing","avg_emissions":88142903,"net_flux":36657594,"annual":{"2001":45977,"2002":57425,"2003":36975,"2004":71496,"2005":66742,"2006":128253,"2007":121912,"2008":105149,"2009":211515,"2010":107241,"2011":182064,"2012":255656,"2013":147487,"2014":211485,"2015":183872,"2016":313958,"2017":134297,"2018":147742,"2019":132059,"2020":91821,"2021":74061,"2022":61563,"2023":134307,"2024":110376}},{"name":"Kalimantan Utara","lat":3.073,"lng":116.041,"total":791013,"extent_2000":6837686,"peak_year":2012,"peak_ha":60396,"trend":"Decreasing","avg_emissions":26579950,"net_flux":15468388,"annual":{"2001":27060,"2002":23604,"2003":16648,"2004":36334,"2005":23948,"2006":24116,"2007":30813,"2008":39795,"2009":51702,"2010":29944,"2011":41756,"2012":60396,"2013":31842,"2014":59037,"2015":47844,"2016":38488,"2017":33775,"2018":36813,"2019":29326,"2020":24481,"2021":19260,"2022":17636,"2023":26441,"2024":19954}},{"name":"Kepulauan Riau","lat":3.946,"lng":108.143,"total":152875,"extent_2000":689780,"peak_year":2014,"peak_ha":19231,"trend":"Stable","avg_emissions":3494556,"net_flux":345194,"annual":{"2001":1719,"2002":5529,"2003":1775,"2004":4533,"2005":8092,"2006":5433,"2007":2688,"2008":8706,"2009":5234,"2010":4797,"2011":6945,"2012":9375,"2013":4763,"2014":19231,"2015":5869,"2016":13058,"2017":7993,"2018":6266,"2019":8888,"2020":8779,"2021":4391,"2022":2845,"2023":3343,"2024":2623}},{"name":"Lampung","lat":-4.559,"lng":105.407,"total":315469,"extent_2000":1783131,"peak_year":2012,"peak_ha":30337,"trend":"Increasing","avg_emissions":7362156,"net_flux":-4619731,"annual":{"2001":10335,"2002":9346,"2003":4981,"2004":10520,"2005":9319,"2006":14046,"2007":15584,"2008":16173,"2009":23141,"2010":14090,"2011":16755,"2012":30337,"2013":5150,"2014":11365,"2015":14132,"2016":16242,"2017":11761,"2018":10337,"2019":13177,"2020":9472,"2021":7605,"2022":7023,"2023":21635,"2024":12943}},{"name":"Maluku","lat":-3.239,"lng":130.145,"total":260940,"extent_2000":4147416,"peak_year":2015,"peak_ha":48979,"trend":"Stable","avg_emissions":7366969,"net_flux":-6762690,"annual":{"2001":4540,"2002":14596,"2003":4307,"2004":7367,"2005":5605,"2006":12417,"2007":4456,"2008":2934,"2009":13425,"2010":4397,"2011":9380,"2012":11375,"2013":4668,"2014":15224,"2015":48979,"2016":27623,"2017":7333,"2018":11187,"2019":17179,"2020":5660,"2021":3727,"2022":5059,"2023":14304,"2024":5198}},{"name":"Maluku Utara","lat":1.571,"lng":127.809,"total":293194,"extent_2000":3073260,"peak_year":2015,"peak_ha":45451,"trend":"Decreasing","avg_emissions":8991911,"net_flux":-3022874,"annual":{"2001":7354,"2002":23402,"2003":10039,"2004":12043,"2005":6418,"2006":16112,"2007":5353,"2008":4956,"2009":13474,"2010":6067,"2011":5746,"2012":9010,"2013":6781,"2014":17979,"2015":45451,"2016":26859,"2017":10589,"2018":12375,"2019":14166,"2020":7423,"2021":6041,"2022":6358,"2023":11895,"2024":7303}},{"name":"Nusa Tenggara Barat","lat":-8.653,"lng":117.362,"total":102928,"extent_2000":1134688,"peak_year":2023,"peak_ha":9928,"trend":"Increasing","avg_emissions":2448809,"net_flux":-1249137,"annual":{"2001":2882,"2002":2675,"2003":1719,"2004":4554,"2005":2035,"2006":2486,"2007":1993,"2008":2735,"2009":1952,"2010":1146,"2011":2327,"2012":3118,"2013":1540,"2014":7148,"2015":4435,"2016":4028,"2017":6195,"2018":8144,"2019":8705,"2020":6598,"2021":4816,"2022":5616,"2023":9928,"2024":6153}},{"name":"Nusa Tenggara Timur","lat":-8.657,"lng":121.079,"total":147546,"extent_2000":2298069,"peak_year":2017,"peak_ha":10350,"trend":"Increasing","avg_emissions":3180445,"net_flux":-5021769,"annual":{"2001":4725,"2002":4608,"2003":3848,"2004":4686,"2005":5052,"2006":6987,"2007":5033,"2008":4451,"2009":5917,"2010":1779,"2011":7816,"2012":4649,"2013":2105,"2014":9175,"2015":7422,"2016":7367,"2017":10350,"2018":5184,"2019":7794,"2020":6516,"2021":9791,"2022":7000,"2023":8807,"2024":6484}},{"name":"Papua","lat":-4.27,"lng":138.08,"total":766516,"extent_2000":29567782,"peak_year":2016,"peak_ha":83052,"trend":"Increasing","avg_emissions":24079379,"net_flux":-39003382,"annual":{"2001":12589,"2002":20479,"2003":11731,"2004":19129,"2005":14728,"2006":21300,"2007":21135,"2008":15555,"2009":23129,"2010":25679,"2011":23157,"2012":46692,"2013":38013,"2014":58753,"2015":82032,"2016":83052,"2017":49615,"2018":34778,"2019":34560,"2020":29911,"2021":26341,"2022":28605,"2023":22967,"2024":22586}},{"name":"Papua Barat","lat":-1.336,"lng":133.175,"total":343247,"extent_2000":9456462,"peak_year":2015,"peak_ha":42462,"trend":"Increasing","avg_emissions":11305359,"net_flux":-14228716,"annual":{"2001":6078,"2002":14749,"2003":7247,"2004":12226,"2005":7085,"2006":11049,"2007":6648,"2008":7890,"2009":14431,"2010":11693,"2011":11549,"2012":13560,"2013":7906,"2014":17905,"2015":42462,"2016":26815,"2017":15891,"2018":20511,"2019":16558,"2020":16318,"2021":12209,"2022":13752,"2023":16565,"2024":12150}},{"name":"Riau","lat":0.293,"lng":101.707,"total":4302356,"extent_2000":7848784,"peak_year":2005,"peak_ha":355413,"trend":"Decreasing","avg_emissions":164542246,"net_flux":115914424,"annual":{"2001":156510,"2002":154561,"2003":57204,"2004":270588,"2005":355413,"2006":202107,"2007":211991,"2008":204516,"2009":247897,"2010":341923,"2011":255307,"2012":346655,"2013":156345,"2014":282785,"2015":90762,"2016":147085,"2017":123675,"2018":101107,"2019":102819,"2020":94605,"2021":95679,"2022":86882,"2023":115270,"2024":100670}},{"name":"Sulawesi Barat","lat":-2.842,"lng":119.232,"total":275309,"extent_2000":1513864,"peak_year":2001,"peak_ha":16400,"trend":"Decreasing","avg_emissions":7935352,"net_flux":4048279,"annual":{"2001":16400,"2002":12107,"2003":6885,"2004":15736,"2005":9396,"2006":11481,"2007":4152,"2008":12540,"2009":11858,"2010":7196,"2011":13855,"2012":13555,"2013":8072,"2014":14213,"2015":14055,"2016":13677,"2017":12564,"2018":12974,"2019":13036,"2020":8513,"2021":9848,"2022":10043,"2023":14697,"2024":8456}},{"name":"Sulawesi Selatan","lat":-3.669,"lng":119.974,"total":380313,"extent_2000":3038092,"peak_year":2016,"peak_ha":30886,"trend":"Increasing","avg_emissions":10184357,"net_flux":198769,"annual":{"2001":8487,"2002":12727,"2003":5984,"2004":17831,"2005":8573,"2006":13891,"2007":9525,"2008":8126,"2009":23379,"2010":8401,"2011":14390,"2012":16130,"2013":9008,"2014":21475,"2015":28080,"2016":30886,"2017":24051,"2018":19442,"2019":22925,"2020":14268,"2021":10243,"2022":15943,"2023":26949,"2024":9599}},{"name":"Sulawesi Tengah","lat":-1.43,"lng":121.446,"total":841879,"extent_2000":5659031,"peak_year":2015,"peak_ha":91932,"trend":"Increasing","avg_emissions":23845344,"net_flux":10790439,"annual":{"2001":17547,"2002":33169,"2003":20131,"2004":40160,"2005":18074,"2006":30635,"2007":20347,"2008":16733,"2009":52427,"2010":21980,"2011":26195,"2012":37172,"2013":28515,"2014":46762,"2015":91932,"2016":74262,"2017":36947,"2018":37525,"2019":45513,"2020":26788,"2021":22583,"2022":24645,"2023":43093,"2024":28744}},{"name":"Sulawesi Tenggara","lat":-4.149,"lng":122.175,"total":569274,"extent_2000":3163838,"peak_year":2006,"peak_ha":44384,"trend":"Stable","avg_emissions":15919592,"net_flux":5230308,"annual":{"2001":15947,"2002":15851,"2003":13418,"2004":41603,"2005":16418,"2006":44384,"2007":9984,"2008":8700,"2009":30091,"2010":7630,"2011":22949,"2012":23041,"2013":15485,"2014":39717,"2015":43540,"2016":38445,"2017":27135,"2018":24214,"2019":34956,"2020":18920,"2021":12405,"2022":13369,"2023":34164,"2024":16908}},{"name":"Sulawesi Utara","lat":0.625,"lng":123.975,"total":124098,"extent_2000":1305508,"peak_year":2015,"peak_ha":15596,"trend":"Decreasing","avg_emissions":3761850,"net_flux":-4643684,"annual":{"2001":4520,"2002":7683,"2003":2910,"2004":6841,"2005":3473,"2006":4894,"2007":4278,"2008":1609,"2009":6999,"2010":2037,"2011":3116,"2012":2671,"2013":1715,"2014":6875,"2015":15596,"2016":8782,"2017":5777,"2018":7455,"2019":8921,"2020":3124,"2021":2824,"2022":2731,"2023":5793,"2024":3474}},{"name":"Sumatera Barat","lat":-0.74,"lng":100.8,"total":740807,"extent_2000":3810773,"peak_year":2017,"peak_ha":51512,"trend":"Increasing","avg_emissions":20301576,"net_flux":8809074,"annual":{"2001":15016,"2002":15384,"2003":9833,"2004":26547,"2005":29284,"2006":32715,"2007":31672,"2008":34037,"2009":40537,"2010":22960,"2011":42570,"2012":36511,"2013":22433,"2014":30560,"2015":22500,"2016":39172,"2017":51512,"2018":37400,"2019":30977,"2020":30395,"2021":35801,"2022":35602,"2023":35180,"2024":32209}},{"name":"Sumatera Selatan","lat":-3.319,"lng":103.914,"total":3285756,"extent_2000":7037599,"peak_year":2012,"peak_ha":361299,"trend":"Increasing","avg_emissions":103796458,"net_flux":47756430,"annual":{"2001":59014,"2002":65958,"2003":30693,"2004":102154,"2005":87403,"2006":170369,"2007":173988,"2008":189246,"2009":201438,"2010":120180,"2011":132284,"2012":361299,"2013":100948,"2014":159552,"2015":169040,"2016":275754,"2017":124661,"2018":125458,"2019":102590,"2020":108366,"2021":77866,"2022":87810,"2023":139240,"2024":120445}},{"name":"Sumatera Utara","lat":2.115,"lng":99.545,"total":1619524,"extent_2000":5784850,"peak_year":2009,"peak_ha":121059,"trend":"Stable","avg_emissions":33907936,"net_flux":8280578,"annual":{"2001":54337,"2002":39735,"2003":37482,"2004":72385,"2005":74515,"2006":66724,"2007":52432,"2008":65671,"2009":121059,"2010":93338,"2011":100568,"2012":89313,"2013":53252,"2014":85505,"2015":53040,"2016":79282,"2017":74551,"2018":66196,"2019":51889,"2020":50234,"2021":59204,"2022":49218,"2023":65335,"2024":64259}}],"top10_names":["Riau","Kalimantan Barat","Kalimantan Tengah","Sumatera Selatan","Kalimantan Timur","Jambi","Sumatera Utara","Kalimantan Selatan","Aceh","Sulawesi Tengah"],"top10_totals_kha":[4302.4,4209.1,3860.2,3285.8,3133.4,2006.0,1619.5,933.5,856.9,841.9],"top10_pct":[54.8,30.9,27.1,46.7,26.7,44.7,28.0,33.1,17.2,14.9]};
+const YEARS = Object.keys(D.annual_loss).map(Number);
+
+// ═══ LAHAN SAWIT DATA (2011–2023) ═══
+const SAWIT_DATA = {
+  "2011": {"Aceh":360.2,"Sumatera Utara":1164.0,"Sumatera Barat":370.7,"Riau":1919.0,"Jambi":647.0,"Sumatera Selatan":873.8,"Bengkulu":308.1,"Lampung":123.4,"Bangka Belitung":186.1,"Kepulauan Riau":8.7,"Jakarta":0,"Jawa Barat":14.1,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":14.8,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":700.5,"Kalimantan Tengah":1008.4,"Kalimantan Selatan":424.8,"Kalimantan Timur":657.3,"Kalimantan Utara":0,"Sulawesi Utara":0,"Sulawesi Tengah":93.8,"Sulawesi Selatan":27.9,"Sulawesi Tenggara":44.8,"Gorontalo":0,"Sulawesi Barat":95.2,"Maluku":0,"Maluku Utara":0,"Papua Barat":20.1,"Papua":39.5},
+  "2012": {"Aceh":381.49,"Sumatera Utara":1222.91,"Sumatera Barat":355.9,"Riau":2139.82,"Jambi":696.81,"Sumatera Selatan":898.16,"Bengkulu":290.21,"Lampung":160.56,"Bangka Belitung":190.39,"Kepulauan Riau":18.98,"Jakarta":0,"Jawa Barat":10.88,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.87,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":897.93,"Kalimantan Tengah":1126.51,"Kalimantan Selatan":497.69,"Kalimantan Timur":789.39,"Kalimantan Utara":0,"Sulawesi Utara":0,"Sulawesi Tengah":142.59,"Sulawesi Selatan":32.26,"Sulawesi Tenggara":60.57,"Gorontalo":0,"Sulawesi Barat":95.08,"Maluku":15.61,"Maluku Utara":0,"Papua Barat":38.98,"Papua":50.72},
+  "2013": {"Aceh":396.64,"Sumatera Utara":1340.35,"Sumatera Barat":364.21,"Riau":2193.72,"Jambi":657.93,"Sumatera Selatan":1060.57,"Bengkulu":290.63,"Lampung":158.05,"Bangka Belitung":201.09,"Kepulauan Riau":19.04,"Jakarta":0,"Jawa Barat":13.61,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":20.1,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":914.84,"Kalimantan Tengah":1099.69,"Kalimantan Selatan":475.74,"Kalimantan Timur":714.21,"Kalimantan Utara":102.05,"Sulawesi Utara":0,"Sulawesi Tengah":140.88,"Sulawesi Selatan":36.26,"Sulawesi Tenggara":45.42,"Gorontalo":0,"Sulawesi Barat":96.32,"Maluku":33.98,"Maluku Utara":0,"Papua Barat":38.98,"Papua":50.72},
+  "2014": {"Aceh":420.2,"Sumatera Utara":1396.3,"Sumatera Barat":376.5,"Riau":2290.7,"Jambi":693.0,"Sumatera Selatan":923.0,"Bengkulu":293.8,"Lampung":184.9,"Bangka Belitung":206.2,"Kepulauan Riau":19.0,"Jakarta":0,"Jawa Barat":13.6,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.7,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":936.4,"Kalimantan Tengah":1115.9,"Kalimantan Selatan":512.9,"Kalimantan Timur":733.4,"Kalimantan Utara":153.3,"Sulawesi Utara":0,"Sulawesi Tengah":147.9,"Sulawesi Selatan":50.9,"Sulawesi Tenggara":45.2,"Gorontalo":4.3,"Sulawesi Barat":106.4,"Maluku":10.3,"Maluku Utara":0,"Papua Barat":49.6,"Papua":51.4},
+  "2015": {"Aceh":428.2,"Sumatera Utara":1427.0,"Sumatera Barat":383.4,"Riau":2400.9,"Jambi":714.4,"Sumatera Selatan":952.1,"Bengkulu":288.9,"Lampung":207.9,"Bangka Belitung":211.1,"Kepulauan Riau":19.0,"Jakarta":0,"Jawa Barat":14.1,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.3,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":1144.2,"Kalimantan Tengah":1142.0,"Kalimantan Selatan":421.1,"Kalimantan Timur":849.6,"Kalimantan Utara":157.4,"Sulawesi Utara":0,"Sulawesi Tengah":151.1,"Sulawesi Selatan":51.7,"Sulawesi Tenggara":45.8,"Gorontalo":11.1,"Sulawesi Barat":108.2,"Maluku":10.1,"Maluku Utara":0,"Papua Barat":51.0,"Papua":50.8},
+  "2016": {"Aceh":370.1,"Sumatera Utara":1342.6,"Sumatera Barat":378.4,"Riau":2013.1,"Jambi":663.5,"Sumatera Selatan":901.7,"Bengkulu":285.1,"Lampung":199.5,"Bangka Belitung":232.2,"Kepulauan Riau":7.4,"Jakarta":0,"Jawa Barat":17.3,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.4,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":1264.4,"Kalimantan Tengah":1288.1,"Kalimantan Selatan":553.1,"Kalimantan Timur":1021.3,"Kalimantan Utara":50.3,"Sulawesi Utara":0,"Sulawesi Tengah":158.2,"Sulawesi Selatan":55.7,"Sulawesi Tenggara":69.0,"Gorontalo":6.0,"Sulawesi Barat":150.3,"Maluku":10.1,"Maluku Utara":0,"Papua Barat":59.7,"Papua":85.0},
+  "2017": {"Aceh":440.3,"Sumatera Utara":1461.2,"Sumatera Barat":397.5,"Riau":2209.6,"Jambi":768.0,"Sumatera Selatan":1032.8,"Bengkulu":339.8,"Lampung":242.3,"Bangka Belitung":241.6,"Kepulauan Riau":9.9,"Jakarta":0,"Jawa Barat":16.7,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.8,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":1475.7,"Kalimantan Tengah":1339.0,"Kalimantan Selatan":508.0,"Kalimantan Timur":1078.8,"Kalimantan Utara":67.5,"Sulawesi Utara":0,"Sulawesi Tengah":174.5,"Sulawesi Selatan":65.0,"Sulawesi Tenggara":73.8,"Gorontalo":6.8,"Sulawesi Barat":162.4,"Maluku":13.7,"Maluku Utara":0,"Papua Barat":60.3,"Papua":178.1},
+  "2018": {"Aceh":494.2,"Sumatera Utara":1551.6,"Sumatera Barat":379.6,"Riau":2706.9,"Jambi":1032.1,"Sumatera Selatan":1137.6,"Bengkulu":311.8,"Lampung":201.6,"Bangka Belitung":224.5,"Kepulauan Riau":7.9,"Jakarta":0,"Jawa Barat":15.7,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.4,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":1815.1,"Kalimantan Tengah":1640.9,"Kalimantan Selatan":542.4,"Kalimantan Timur":1434.5,"Kalimantan Utara":155.2,"Sulawesi Utara":0,"Sulawesi Tengah":134.9,"Sulawesi Selatan":48.8,"Sulawesi Tenggara":74.9,"Gorontalo":10.0,"Sulawesi Barat":167.5,"Maluku":11.1,"Maluku Utara":0,"Papua Barat":50.9,"Papua":157.2},
+  "2019": {"Aceh":487.5,"Sumatera Utara":1373.3,"Sumatera Barat":379.7,"Riau":2741.5,"Jambi":1034.8,"Sumatera Selatan":1191.4,"Bengkulu":310.7,"Lampung":193.0,"Bangka Belitung":225.2,"Kepulauan Riau":7.4,"Jakarta":0,"Jawa Barat":13.7,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.2,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":2017.5,"Kalimantan Tengah":1922.1,"Kalimantan Selatan":471.3,"Kalimantan Timur":1254.2,"Kalimantan Utara":155.4,"Sulawesi Utara":0,"Sulawesi Tengah":137.5,"Sulawesi Selatan":51.8,"Sulawesi Tenggara":61.7,"Gorontalo":11.7,"Sulawesi Barat":156.1,"Maluku":10.0,"Maluku Utara":5.5,"Papua Barat":50.7,"Papua":173.7},
+  "2020": {"Aceh":488.0,"Sumatera Utara":1325.1,"Sumatera Barat":393.3,"Riau":2853.8,"Jambi":1074.6,"Sumatera Selatan":1198.0,"Bengkulu":325.3,"Lampung":196.3,"Bangka Belitung":239.8,"Kepulauan Riau":7.4,"Jakarta":0,"Jawa Barat":13.5,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.2,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":2039.2,"Kalimantan Tengah":2018.7,"Kalimantan Selatan":497.3,"Kalimantan Timur":1313.6,"Kalimantan Utara":157.7,"Sulawesi Utara":0,"Sulawesi Tengah":145.9,"Sulawesi Selatan":44.7,"Sulawesi Tenggara":110.3,"Gorontalo":13.3,"Sulawesi Barat":156.2,"Maluku":10.9,"Maluku Utara":5.5,"Papua Barat":51.0,"Papua":159.7},
+  "2021": {"Aceh":476.7,"Sumatera Utara":1285.8,"Sumatera Barat":430.4,"Riau":2860.8,"Jambi":1083.9,"Sumatera Selatan":1058.6,"Bengkulu":319.4,"Lampung":192.6,"Bangka Belitung":238.6,"Kepulauan Riau":7.4,"Jakarta":0,"Jawa Barat":14.0,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":18.8,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":2117.9,"Kalimantan Tengah":1815.6,"Kalimantan Selatan":479.3,"Kalimantan Timur":1366.1,"Kalimantan Utara":215.6,"Sulawesi Utara":0,"Sulawesi Tengah":141.5,"Sulawesi Selatan":48.5,"Sulawesi Tenggara":77.4,"Gorontalo":13.9,"Sulawesi Barat":145.1,"Maluku":10.2,"Maluku Utara":5.6,"Papua Barat":58.8,"Papua":181.1},
+  "2022": {"Aceh":474.9,"Sumatera Utara":1370.4,"Sumatera Barat":439.9,"Riau":2868.1,"Jambi":1072.0,"Sumatera Selatan":1134.2,"Bengkulu":418.1,"Lampung":198.6,"Bangka Belitung":250.2,"Kepulauan Riau":7.7,"Jakarta":0,"Jawa Barat":15.8,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":19.0,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":2072.7,"Kalimantan Tengah":2205.8,"Kalimantan Selatan":516.1,"Kalimantan Timur":1370.6,"Kalimantan Utara":237.0,"Sulawesi Utara":0,"Sulawesi Tengah":142.2,"Sulawesi Selatan":50.2,"Sulawesi Tenggara":73.9,"Gorontalo":19.1,"Sulawesi Barat":147.5,"Maluku":10.2,"Maluku Utara":5.6,"Papua Barat":73.3,"Papua":145.6},
+  "2023": {"Aceh":471.36,"Sumatera Utara":1352.23,"Sumatera Barat":440.28,"Riau":3401.61,"Jambi":952.15,"Sumatera Selatan":1241.09,"Bengkulu":418.43,"Lampung":197.46,"Bangka Belitung":255.72,"Kepulauan Riau":7.73,"Jakarta":0,"Jawa Barat":15.18,"Jawa Tengah":0,"Yogyakarta":0,"Jawa Timur":0,"Banten":18.53,"Bali":0,"Nusa Tenggara Barat":0,"Nusa Tenggara Timur":0,"Kalimantan Barat":2133.41,"Kalimantan Tengah":2171.0,"Kalimantan Selatan":470.74,"Kalimantan Timur":1490.95,"Kalimantan Utara":237.71,"Sulawesi Utara":0,"Sulawesi Tengah":140.86,"Sulawesi Selatan":54.71,"Sulawesi Tenggara":61.79,"Gorontalo":12.57,"Sulawesi Barat":147.27,"Maluku":10.2,"Maluku Utara":5.56,"Papua Barat":75.98,"Papua":144.24}
+};
+
+// Province coordinates lookup (for SAWIT data which uses name keys)
+const PROV_COORDS = {
+  "Aceh":[4.695,96.749],"Sumatera Utara":[2.115,99.545],"Sumatera Barat":[-0.74,100.8],
+  "Riau":[0.293,101.707],"Jambi":[-1.61,103.613],"Sumatera Selatan":[-3.319,103.914],
+  "Bengkulu":[-3.578,102.346],"Lampung":[-4.559,105.407],"Bangka Belitung":[-2.741,106.441],
+  "Kepulauan Riau":[3.946,108.143],"Jakarta":[-6.2,106.8],"Jawa Barat":[-7.091,107.669],
+  "Jawa Tengah":[-7.15,110.14],"Yogyakarta":[-7.8,110.4],"Jawa Timur":[-7.536,112.238],
+  "Banten":[-6.406,106.064],"Bali":[-8.34,115.092],"Nusa Tenggara Barat":[-8.653,117.362],
+  "Nusa Tenggara Timur":[-8.657,121.079],"Kalimantan Barat":[0,110.0],
+  "Kalimantan Tengah":[-1.682,113.382],"Kalimantan Selatan":[-3.093,115.284],
+  "Kalimantan Timur":[1.641,116.419],"Kalimantan Utara":[3.073,116.041],
+  "Sulawesi Utara":[0.625,123.975],"Sulawesi Tengah":[-1.43,121.446],
+  "Sulawesi Selatan":[-3.669,119.974],"Sulawesi Tenggara":[-4.149,122.175],
+  "Gorontalo":[0.7,122.447],"Sulawesi Barat":[-2.842,119.232],
+  "Maluku":[-3.239,130.145],"Maluku Utara":[1.571,127.809],
+  "Papua Barat":[-1.336,133.175],"Papua":[-4.27,138.08]
+};
+
+// ═══════════════════════════════════════
+// COUNTER ANIMATIONS
+// ═══════════════════════════════════════
+function animateCounter(el) {
+  const target = +el.dataset.target, suffix = el.dataset.suffix || '';
+  let start = null;
+  const step = ts => {
+    if (!start) start = ts;
+    const p = Math.min((ts - start) / 2000, 1), e = 1 - Math.pow(1 - p, 3);
+    const v = target % 1 !== 0 ? (e * target).toFixed(target < 2 ? 3 : 1) : Math.floor(e * target);
+    el.textContent = v + suffix;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+const revObs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }), { threshold: 0.08 });
+document.querySelectorAll('.reveal').forEach(r => revObs.observe(r));
+new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) document.querySelectorAll('.counter').forEach(animateCounter); }), { threshold: 0.4 }).observe(document.getElementById('hero'));
+
+// ═══════════════════════════════════════
+// CHART.JS DEFAULTS
+// ═══════════════════════════════════════
+Chart.defaults.color = '#8a9e8c'; Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+Chart.defaults.font.family = "'Space Mono', monospace"; Chart.defaults.font.size = 10;
+
+// Line chart - annual loss
+new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: { labels: YEARS, datasets: [{ data: YEARS.map(y => D.annual_loss[y]), borderColor: '#4caf50', backgroundColor: 'rgba(76,175,80,0.07)', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#4caf50', fill: true, tension: 0.35 }] },
+  options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => (ctx.parsed.y/1e6).toFixed(3)+' M ha' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { callback: v => (v/1e6).toFixed(1)+'M' } } } }
+});
+
+// Emissions chart
+new Chart(document.getElementById('emissionsChart'), {
+  type: 'bar',
+  data: { labels: YEARS, datasets: [{ data: YEARS.map(y => D.annual_emissions[y]), backgroundColor: YEARS.map(y => D.annual_emissions[y] > 1200000000 ? 'rgba(231,76,60,0.8)' : 'rgba(243,156,18,0.65)'), borderRadius: 2 }] },
+  options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => (ctx.parsed.y/1e9).toFixed(3)+' Gt CO₂e' } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { callback: v => (v/1e9).toFixed(1)+'Gt' } } } }
+});
+
+// Top 10 bar chart (horizontal)
+new Chart(document.getElementById('barChart'), {
+  type: 'bar',
+  data: { labels: D.top10_names, datasets: [{ data: D.top10_totals_kha, backgroundColor: ['#e74c3c','#e74c3c','#e74c3c','#e55a20','#e55a20','#f39c12','#f9ca24','#f9ca24','#a8d5a2','#a8d5a2'], borderRadius: 4 }] },
+  options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x.toFixed(1)+' K ha · '+D.top10_pct[ctx.dataIndex]+'% of 2000 extent' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { callback: v => v+'K' } }, y: { grid: { display: false }, ticks: { font: { size: 9 } } } } }
+});
+
+// Carbon balance doughnut
+new Chart(document.getElementById('carbonChart'), {
+  type: 'doughnut',
+  data: { labels: ['Gross Emissions (967M Mg/yr)','Removals / Sequestration (611M Mg/yr)'], datasets: [{ data: [D.avg_emissions/1e6, D.avg_removals/1e6], backgroundColor: ['rgba(231,76,60,0.82)','rgba(76,175,80,0.72)'], borderWidth: 0, hoverOffset: 6 }] },
+  options: { responsive: true, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 9 } } }, tooltip: { callbacks: { label: ctx => ctx.label+': '+ctx.parsed.toFixed(0)+' M Mg/yr' } } } }
+});
+
+// Scatter loss vs emissions
+const scatterData = YEARS.map(y => ({ x: D.annual_loss[y]/1000, y: D.annual_emissions[y]/1e9, year: y }));
+new Chart(document.getElementById('scatterChart'), {
+  type: 'scatter',
+  data: { datasets: [{ data: scatterData, backgroundColor: 'rgba(231,76,60,0.7)', pointRadius: 5.5 }] },
+  options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.raw.year}: ${ctx.raw.x.toFixed(0)}K ha · ${ctx.raw.y.toFixed(3)} Gt` } } }, scales: { x: { title: { display: true, text: 'Annual Loss (K ha)', color: '#8a9e8c' }, grid: { color: 'rgba(255,255,255,0.04)' } }, y: { title: { display: true, text: 'Emissions (Gt CO₂e)', color: '#8a9e8c' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
+});
+
+// ═══════════════════════════════════════
+// MAP — LEAFLET WITH FILTERS
+// ═══════════════════════════════════════
+const map = L.map('leaflet-map', { center: [-2, 118], zoom: 5, attributionControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+let markerLayer = L.layerGroup().addTo(map);
+
+const fmt = n => n>=1e6?(n/1e6).toFixed(2)+' M':n>=1e3?(n/1e3).toFixed(1)+' K':n.toFixed(0);
+
+// Sawit years: 2011–2023
+const SAWIT_YEARS_MIN = 2011, SAWIT_YEARS_MAX = 2023;
+// Deforestation years: 2001–2024
+const DEFOR_YEARS = YEARS;
+
+// Year filter options
+function populateYearFilter(category) {
+  const sel = document.getElementById('yearFilter');
+  sel.innerHTML = '';
+  if (category === 'sawit') {
+    for (let y = SAWIT_YEARS_MAX; y >= SAWIT_YEARS_MIN; y--) {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      sel.appendChild(opt);
+    }
+  } else {
+    // deforestation — all years + "All (2001–2024)"
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all'; allOpt.textContent = 'All Years (Total)';
+    sel.appendChild(allOpt);
+    for (let i = DEFOR_YEARS.length - 1; i >= 0; i--) {
+      const opt = document.createElement('option');
+      opt.value = DEFOR_YEARS[i]; opt.textContent = DEFOR_YEARS[i];
+      sel.appendChild(opt);
+    }
+  }
+}
+
+// Update legend based on category
+function updateLegend(category) {
+  const items = document.getElementById('legendItems');
+  if (category === 'sawit') {
+    items.innerHTML = `
+      <div class="legend-item"><div class="legend-dot" style="background:#4caf50"></div> Low (&lt; 500 Thousand Ha)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f9ca24"></div> Medium (500–1,000 Thousand Ha)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div> High (&gt; 1,000 Thousand Ha)</div>
+    `;
+  } else {
+    items.innerHTML = `
+      <div class="legend-item"><div class="legend-dot" style="background:#4caf50"></div> Low (&lt; 4% of 2000 extent)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8bc34a"></div> Low–Medium (4–12%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f9ca24"></div> Medium (12–25%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f39c12"></div> High (25–55%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div> Very High (&gt; 55%)</div>
+    `;
+  }
+}
+
+// Render map markers
+function renderMap() {
+  markerLayer.clearLayers();
+  const category = document.getElementById('dataCategory').value;
+  const year = document.getElementById('yearFilter').value;
+  const overlay = document.getElementById('map-na');
+
+  // Check not-available for sawit outside 2011–2023
+  if (category === 'sawit') {
+    const yr = parseInt(year);
+    if (!SAWIT_DATA[String(yr)]) {
+      overlay.style.display = 'flex';
+      return;
+    }
+    overlay.style.display = 'none';
+
+    const data = SAWIT_DATA[String(yr)];
+    const maxVal = Math.max(...Object.values(data).filter(v => v > 0));
+    for (const prov in data) {
+      const coords = PROV_COORDS[prov];
+      if (!coords) continue;
+      const val = data[prov];
+      if (val <= 0) continue;
+      const color = val > 1000 ? '#e74c3c' : val > 500 ? '#f9ca24' : '#4caf50';
+      const radius = 5 + 28 * Math.sqrt(val / maxVal);
+      L.circleMarker(coords, { radius, fillColor: color, color: 'rgba(0,0,0,0.3)', weight: 1, opacity: .9, fillOpacity: .72 })
+        .addTo(markerLayer)
+        .bindPopup(
+          `<div class="popup-content"><h4>${prov}</h4>` +
+          `<p>Palm Oil Area ${yr}: <span class="pop-val">${val.toLocaleString('en-US')} Thousand Ha</span></p></div>`,
+          { className: 'custom-popup' }
+        );
+    }
+    return;
+  }
+
+  // Deforestation mode
+  overlay.style.display = 'none';
+
+  const maxTotal = Math.max(...D.provinces.map(p => p.total));
+  const scaleR = t => t <= 0 ? 3 : 5 + 33 * Math.sqrt(t / maxTotal);
+  const scaleC = t => { const r = t/maxTotal; return r<0.04?'#4caf50':r<0.12?'#8bc34a':r<0.25?'#f9ca24':r<0.55?'#f39c12':'#e74c3c'; };
+
+  D.provinces.forEach(p => {
+    let displayVal, displayLabel;
+    if (year === 'all') {
+      displayVal = p.total;
+      displayLabel = `Total Loss 2001–2024: <span class="pop-val">${fmt(displayVal)} ha</span>`;
+    } else {
+      const yr = parseInt(year);
+      displayVal = p.annual ? p.annual[yr] : undefined;
+      if (!displayVal || displayVal < 100) return;
+      displayLabel = `Loss ${yr}: <span class="pop-val">${fmt(displayVal)} ha</span>`;
+    }
+    if (!displayVal || displayVal < 100) return;
+
+    const pct = (p.total/p.extent_2000*100).toFixed(1);
+    const tC = p.trend==='Increasing'?'#ff6b6b':p.trend==='Decreasing'?'#a8d5a2':'#f9ca24';
+    const tI = p.trend==='Increasing'?'↑':p.trend==='Decreasing'?'↓':'→';
+    const nfCls = p.net_flux > 0 ? 'pop-val' : 'pop-green';
+    const nfTxt = p.net_flux > 0 ? '+'+fmt(p.net_flux)+' (source)' : fmt(Math.abs(p.net_flux))+' net sink';
+    const emClass = p.avg_emissions > 50e6 ? 'pop-val' : p.avg_emissions > 10e6 ? 'pop-warn' : 'pop-green';
+
+    // For individual years, scale radius by that year's value
+    let radius;
+    if (year === 'all') {
+      radius = scaleR(p.total);
+    } else {
+      const maxAnnual = Math.max(...D.provinces.map(pr => pr.annual && pr.annual[parseInt(year)] ? pr.annual[parseInt(year)] : 0));
+      radius = displayVal <= 0 ? 3 : 5 + 28 * Math.sqrt(displayVal / maxAnnual);
+    }
+
+    const circle = L.circleMarker([p.lat,p.lng], {
+      radius, fillColor: scaleC(p.total), color:'rgba(0,0,0,0.3)', weight:1, opacity:.9, fillOpacity:.7
+    }).addTo(markerLayer);
+
+    circle.bindPopup(
+      `<div class="popup-content"><h4>${p.name}</h4>` +
+      `<p>${displayLabel}</p>` +
+      `<p>Total Loss 2001–2024: <span class="pop-val">${fmt(p.total)} ha</span></p>` +
+      `<p>% of 2000 Extent: <span class="pop-val">${pct}%</span></p>` +
+      `<p>2000 Forest Extent: <span style="color:var(--cream)">${fmt(p.extent_2000)} ha</span></p>` +
+      `<p>Peak Year: <span class="pop-val">${p.peak_year} · ${fmt(p.peak_ha)} ha</span></p>` +
+      `<p>Recent Trend: <span style="color:${tC}">${tI} ${p.trend}</span></p>` +
+      `<p>Avg. Gross Emissions: <span class="${emClass}">${fmt(p.avg_emissions)} Mg CO₂e/yr</span></p>` +
+      `<p>Net Carbon Flux: <span class="${nfCls}">${nfTxt}</span></p></div>`,
+      { className:'custom-popup' }
+    );
+    circle.on('mouseover', function(){ this.setStyle({ fillOpacity:1, weight:2 }); });
+    circle.on('mouseout', function(){ this.setStyle({ fillOpacity:.7, weight:1 }); });
+  });
+}
+
+// Wire up filters
+document.getElementById('dataCategory').addEventListener('change', function() {
+  populateYearFilter(this.value);
+  updateLegend(this.value);
+  renderMap();
+});
+document.getElementById('yearFilter').addEventListener('change', renderMap);
+
+// Init
+populateYearFilter('deforestation');
+updateLegend('deforestation');
+renderMap();
+
+// ═══════════════════════════════════════
+// CORRELATION BARS
+// ═══════════════════════════════════════
+new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting) document.querySelectorAll('.corr-bar').forEach(b => setTimeout(()=>{ b.style.width=b.dataset.width+'%'; },150)); }), { threshold:0.3 }).observe(document.getElementById('corrStats'));
+
+// ═══════════════════════════════════════
+// SCENARIO SIMULATOR
+// ═══════════════════════════════════════
+const BASE_LOSS_MHA = 1.331796, BASE_EM_GT = 0.967, COVER_2024 = 128.677, EXTENT_2000 = 160.641;
+function updateSim() {
+  const rate=+document.getElementById('rateSlider').value, restore=+document.getElementById('restoreSlider').value, emChg=+document.getElementById('emSlider').value, yrs=+document.getElementById('yearsSlider').value;
+  document.getElementById('rateVal').textContent=(rate>=0?'+':'')+rate+'%';
+  document.getElementById('restoreVal').textContent=restore+'%';
+  document.getElementById('emFactor').textContent=(emChg>=0?'+':'')+emChg+'%';
+  document.getElementById('yearsVal').textContent=yrs;
+  const annLoss=BASE_LOSS_MHA*(1+rate/100), netLoss=Math.max(0,annLoss*(1-restore/100)), totalLoss=netLoss*yrs;
+  const totalCO2=BASE_EM_GT*(1+emChg/100)*(1-restore*0.006)*yrs;
+  const cover=Math.max(0,COVER_2024-totalLoss), pct=(cover/EXTENT_2000*100).toFixed(1);
+  document.getElementById('out-forest').textContent=totalLoss.toFixed(2);
+  document.getElementById('out-co2').textContent=totalCO2.toFixed(2);
+  document.getElementById('out-cover').textContent=cover.toFixed(1);
+  document.getElementById('out-pct').textContent=pct+'%';
+  const fp=Math.min(100,(totalLoss/40)*100), ep=Math.min(100,(totalCO2/60)*100), cp=(cover/EXTENT_2000)*100;
+  const setBar=(id,w,v,hi,mid)=>{ const el=document.getElementById(id); el.style.width=w+'%'; el.style.background=v>=hi?'var(--danger-light)':v>=mid?'var(--amber-light)':'var(--lime)'; };
+  setBar('bar-forest',fp,totalLoss,15,6); setBar('bar-co2',ep,totalCO2,25,12);
+  setBar('bar-cover',cp,100-+pct,40,28); setBar('bar-pct',cp,100-+pct,40,28);
+  const setVal=(id,v,hi,mid)=>{ const el=document.getElementById(id); el.className='value '+(v>=hi?'danger':v>=mid?'warn':'ok'); };
+  setVal('out-forest',totalLoss,15,6); setVal('out-co2',totalCO2,25,12);
+  document.getElementById('out-cover').className='value '+(cover<80?'danger':cover<100?'warn':'ok');
+  document.getElementById('out-pct').className='value '+(+pct<60?'danger':+pct<72?'warn':'ok');
+  const risk=totalLoss<5&&totalCO2<10?'LOW':totalLoss<12&&totalCO2<25?'MODERATE':totalLoss<25?'HIGH':'CRITICAL';
+  const rC=risk==='LOW'?'ok':risk==='MODERATE'?'warn':'danger';
+  const rEl=document.getElementById('out-risk'); rEl.textContent=risk; rEl.className='value '+rC;
+}
+['rateSlider','restoreSlider','emSlider','yearsSlider'].forEach(id=>document.getElementById(id).addEventListener('input',updateSim));
+updateSim();
+</script>
+</body>
+</html>
